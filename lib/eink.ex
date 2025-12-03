@@ -15,7 +15,7 @@ defmodule EInk do
   end
 
   @spec clear(t(), :white | :black | :gray) :: :ok | {:error, any()}
-  def clear(%__MODULE__{} = eink, color \\ :white) do
+  def clear(%__MODULE__{} = eink, color \\ :white, eink_opts \\ []) do
     %{width: w, height: h} = eink.driver_mod.capabilities()
 
     num_pixels = w * h
@@ -35,7 +35,7 @@ defmodule EInk do
 
     Logger.debug("clearing screen")
 
-    draw(eink, data)
+    draw(eink, data, eink_opts)
   end
 
   def draw(eink, image, opts \\ []) do
