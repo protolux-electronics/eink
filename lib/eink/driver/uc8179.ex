@@ -143,7 +143,6 @@ defmodule EInk.Driver.UC8179 do
     SpiDriver.write(state.driver, 0x17, <<0xA5>>)
     :ok = SpiDriver.wait_for_busy(state.driver, polarity: :active_low)
 
-    # Some drivers copy image to 0x10 after refresh for partial update reference
     SpiDriver.write(state.driver, 0x10, image)
 
     {:ok, %{state | boot_flag: true, current_lut: refresh_type}}
@@ -162,20 +161,6 @@ defmodule EInk.Driver.UC8179 do
     if state.driver.debug, do: Logger.debug("UC8179 unified wake")
 
     {:ok, state} = reset(state)
-    # We need width/height again, but they are in config. 
-    # Actually init/2 gets the whole config from GenServer.
-    # We should probably store the GenServer config in state if we need it for wake.
-    # But GenServer calls init after wake/reset.
-    # Wait, GenServer wake calls driver.wake which calls reset and init.
-    # Let's check GenServer wake.
-    # handle_call(:wake, _from, state) do
-    #   {:ok, driver_state} = state.driver_mod.wake(state.driver_state)
-    #   {:reply, :ok, %{state | driver_state: driver_state}}
-    # end
-    # It doesn't pass the config to wake. 
-    # So the driver must store the config or the GenServer must pass it.
-    # I'll update GenServer wake later to pass config if needed, or store it in driver state.
-    # For now, I'll store width/height in driver state.
     {:ok, state}
   end
 
