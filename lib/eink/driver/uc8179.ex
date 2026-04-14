@@ -1,5 +1,5 @@
 defmodule EInk.Driver.UC8179 do
-  use EInk.Driver, width: 800, height: 600, palette: :bw, partial_refresh: true
+  use EInk.Driver, width: 648, height: 480, palette: :bw, partial_refresh: true
 
   alias EInk.Driver.SpiDriver
   alias Circuits.GPIO
@@ -62,10 +62,12 @@ defmodule EInk.Driver.UC8179 do
 
   @impl EInk.Driver
   def reset(state) do
-    :ok = GPIO.write(state.driver.reset, 0)
-    Process.sleep(10)
     :ok = GPIO.write(state.driver.reset, 1)
     Process.sleep(10)
+    :ok = GPIO.write(state.driver.reset, 0)
+    Process.sleep(100)
+    :ok = GPIO.write(state.driver.reset, 1)
+    Process.sleep(100)
 
     :ok = SpiDriver.wait_for_busy(state.driver)
 
