@@ -143,6 +143,7 @@ defmodule EInk.Driver.UC8179 do
     SpiDriver.write(state.driver, 0x17, <<0xA5>>)
     :ok = SpiDriver.wait_for_busy(state.driver, polarity: :active_low)
 
+    # Some drivers copy image to 0x10 after refresh for partial update reference
     SpiDriver.write(state.driver, 0x10, image)
 
     {:ok, %{state | boot_flag: true, current_lut: refresh_type}}
@@ -160,8 +161,7 @@ defmodule EInk.Driver.UC8179 do
   def wake(state) do
     if state.driver.debug, do: Logger.debug("UC8179 unified wake")
 
-    {:ok, state} = reset(state)
-    {:ok, state}
+    {:ok, _state} = reset(state)
   end
 
   defp load_lut(state, lut) do
