@@ -4,6 +4,8 @@ defmodule EInk.Driver.SpiDriver do
   alias Circuits.GPIO
   alias Circuits.SPI
 
+  require Logger
+
   @type t() :: %__MODULE__{}
 
   def open(opts) do
@@ -31,6 +33,16 @@ defmodule EInk.Driver.SpiDriver do
       spi: spi,
       debug: debug
     }
+  end
+
+  @spec close(t()) :: :ok
+  def close(%__MODULE__{} = state) do
+    if state.debug, do: Logger.debug("Closing SpiDriver resources")
+    :ok = GPIO.close(state.reset)
+    :ok = GPIO.close(state.busy)
+    :ok = GPIO.close(state.dc)
+    :ok = SPI.close(state.spi)
+    :ok
   end
 
   @spec write(t(), non_neg_integer(), binary()) :: :ok | {:error, any()}

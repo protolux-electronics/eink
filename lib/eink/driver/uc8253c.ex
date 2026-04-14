@@ -1,8 +1,8 @@
 defmodule EInk.Driver.UC8253C do
   @moduledoc """
-  Driver for UC8253C e-ink display (240x360).
+  Driver for UC8253C e-ink display.
   """
-  use EInk.Driver, width: 240, height: 360, palette: :bw, partial_refresh: true
+  use EInk.Driver
 
   alias EInk.Driver.SpiDriver
   alias Circuits.GPIO
@@ -51,6 +51,11 @@ defmodule EInk.Driver.UC8253C do
   end
 
   @impl EInk.Driver
+  def close(state) do
+    SpiDriver.close(state.driver)
+  end
+
+  @impl EInk.Driver
   def reset(state) do
     if state.driver.debug, do: Logger.debug("UC8253C hardware reset")
 
@@ -65,7 +70,10 @@ defmodule EInk.Driver.UC8253C do
   end
 
   @impl EInk.Driver
-  def init(state, _opts \\ []) do
+  def init(state, opts \\ []) do
+    width = Keyword.fetch!(opts, :width)
+    height = Keyword.fetch!(opts, :height)
+
     if state.driver.debug, do: Logger.debug("UC8253C init")
 
     SpiDriver.write(state.driver, 0x00, <<0xF3, 0x01>>)
@@ -79,7 +87,7 @@ defmodule EInk.Driver.UC8253C do
     SpiDriver.write(state.driver, 0x50, <<0xB7>>)
 
     # Clear buffer 0x10
-    SpiDriver.write(state.driver, 0x10, :binary.copy(<<0xFF>>, div(240 * 360, 8)))
+    SpiDriver.write(state.driver, 0x10, :binary.copy(<<0xFF>>, div(width * height, 8)))
 
     {:ok, state}
   end
@@ -116,7 +124,8 @@ defmodule EInk.Driver.UC8253C do
     if state.driver.debug, do: Logger.debug("UC8253C wake")
 
     {:ok, state} = reset(state)
-    init(state)
+    # init will be called by GenServer
+    {:ok, state}
   end
 
   defp load_lut(state, type) do
