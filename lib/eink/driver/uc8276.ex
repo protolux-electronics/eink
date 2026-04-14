@@ -1,12 +1,11 @@
 defmodule EInk.Driver.UC8276 do
-  use EInk.Driver, width: 400, height: 300, palette: :bw, partial_refresh: true
+  @moduledoc """
+  Driver for UC8276 e-ink display.
+  """
+  use EInk.Driver
 
-  defmodule State do
-    defstruct [:spi, :dc, :reset, :busy, :current_lut, :debug]
-  end
-
+  alias EInk.Driver.SpiDriver
   alias Circuits.GPIO
-  alias Circuits.SPI
 
   require Logger
 
@@ -57,172 +56,109 @@ defmodule EInk.Driver.UC8276 do
     }
   }
 
-  @impl true
+  @impl EInk.Driver
   def new(opts \\ []) do
-    dc_pin = Keyword.get(opts, :dc_pin) || raise "Parameter `:dc_pin` is required"
-    reset_pin = Keyword.get(opts, :reset_pin) || raise "Parameter `:reset_pin` is required"
-    busy_pin = Keyword.get(opts, :busy_pin) || raise "Parameter `:busy_pin` is required"
-    spi_device = Keyword.get(opts, :spi_device) || raise "Parameter `:spi_device` is required"
-    debug = Keyword.get(opts, :debug, false)
+    spi_driver = SpiDriver.open(opts)
 
-    {:ok, dc} = GPIO.open(dc_pin, :output, initial_value: 0)
-    {:ok, reset} = GPIO.open(reset_pin, :output, initial_value: 1)
-    {:ok, busy} = GPIO.open(busy_pin, :input)
-
-    {:ok, spi} = SPI.open(spi_device, mode: 0, speed_hz: 100_000)
-
-    {:ok,
-     %__MODULE__.State{
-       spi: spi,
-       dc: dc,
-       reset: reset,
-       busy: busy,
-       current_lut: nil,
-       debug: debug
-     }}
+    {:ok, %{driver: spi_driver, current_lut: nil}}
   end
 
-  @impl true
-  def reset(%__MODULE__.State{} = epd) do
-    if epd.debug, do: Logger.debug("UC8276 hardware reset")
+  @impl EInk.Driver
+  def close(state) do
+    SpiDriver.close(state.driver)
+  end
 
-    :ok = GPIO.write(epd.reset, 0)
+  @impl EInk.Driver
+  def reset(state) do
+    if state.driver.debug, do: Logger.debug("UC8276 hardware reset")
+
+    :ok = GPIO.write(state.driver.reset, 0)
     :ok = Process.sleep(100)
-    :ok = GPIO.write(epd.reset, 1)
+    :ok = GPIO.write(state.driver.reset, 1)
 
-    {:ok, epd}
+    {:ok, state}
   end
 
-  @impl true
-  def sleep(%__MODULE__.State{} = epd) do
-    if epd.debug, do: Logger.debug("UC8276 entering deep sleep")
+  @impl EInk.Driver
+  def init(state, opts \\ []) do
+    width = Keyword.fetch!(opts, :width)
+    height = Keyword.fetch!(opts, :height)
 
-    write(epd, 0x07, <<0xA5>>)
-  end
+    if state.driver.debug, do: Logger.debug("UC8276 init for #{width}x#{height}")
 
-  @impl true
-  def wake(%__MODULE__.State{} = epd) do
-    if epd.debug, do: Logger.debug("UC8276 waking up")
-
-    {:ok, epd} = reset(epd)
-    init(epd)
-  end
-
-  defp wait_for_busy(%__MODULE__.State{} = epd, opts \\ []) do
-    if epd.debug, do: Logger.debug("UC8276 wait for busy flag")
-
-    timeout = Keyword.get(opts, :timeout, 1000)
-    polarity = Keyword.get(opts, :polarity, :active_low)
-
-    Stream.repeatedly(fn ->
-      Process.sleep(1)
-      {GPIO.read(epd.busy), polarity}
-    end)
-    |> Stream.take(timeout)
-    |> Enum.reduce_while({:error, :timeout}, fn
-      {1, :active_high}, acc -> {:cont, acc}
-      {0, :active_low}, acc -> {:cont, acc}
-      _value, _acc -> {:halt, :ok}
-    end)
-  end
-
-  defp write(%__MODULE__.State{} = epd, command, data) when is_binary(data) do
-    if epd.debug,
-      do:
-        Logger.debug(
-          "UC8276 Command: 0x#{Integer.to_string(command, 16) |> String.pad_leading(2, "0")}"
-        )
-
-    :ok = GPIO.write(epd.dc, 0)
-    {:ok, _data} = SPI.transfer(epd.spi, <<command>>)
-
-    if data != "" do
-      :ok = GPIO.write(epd.dc, 1)
-
-      for chunk <- chunk(data), chunk != "" do
-        cond do
-          not epd.debug -> :ok
-          byte_size(data) <= 128 -> Logger.debug("UC8276 Data: #{debug_hex_str(chunk)}")
-          true -> Logger.debug("UC8276 Data: #{byte_size(chunk)} bytes")
-        end
-
-        {:ok, _data} = SPI.transfer(epd.spi, chunk)
-      end
-    end
-
-    :ok
-  end
-
-  @impl true
-  def init(%__MODULE__.State{} = epd, _opts \\ []) do
-    # Panel settings: 400x300 resolution, shift directions (u/d and l/r)
-    write(epd, 0x00, <<0x3F, 0x4D>>)
+    # Panel settings: widthxheight resolution, shift directions (u/d and l/r)
+    SpiDriver.write(state.driver, 0x00, <<0x3F, 0x4D>>)
 
     # Power settings
-    write(epd, 0x01, <<0x03, 0x10, 0x3F, 0x3F, 0x03>>)
+    SpiDriver.write(state.driver, 0x01, <<0x03, 0x10, 0x3F, 0x3F, 0x03>>)
 
     # Booster soft start settings
-    write(epd, 0x06, <<0x96, 0x96, 0x29>>)
+    SpiDriver.write(state.driver, 0x06, <<0x96, 0x96, 0x29>>)
 
     # PLL clock frequency setting
-    write(epd, 0x30, <<0x09>>)
+    SpiDriver.write(state.driver, 0x30, <<0x09>>)
 
-    # Resolution setting. This corresponds to 400x300
-    write(epd, 0x61, <<0x01, 0x90, 0x01, 0x2C>>)
+    # Resolution setting
+    # e.g. 400x300 is <<0x01, 0x90, 0x01, 0x2C>>
+    # w_high, w_low, h_high, h_low
+    SpiDriver.write(state.driver, 0x61, <<Bitwise.bsr(width, 8), Bitwise.band(width, 0xFF), Bitwise.bsr(height, 8), Bitwise.band(height, 0xFF)>>)
 
     # VCOM DC voltage setting
-    write(epd, 0x82, <<0x05>>)
+    SpiDriver.write(state.driver, 0x82, <<0x05>>)
 
     # Border LUT setting
-    write(epd, 0x50, <<0x97>>)
+    SpiDriver.write(state.driver, 0x50, <<0x97>>)
 
     # Gate/source overlap setting
-    write(epd, 0x60, <<0x22>>)
+    SpiDriver.write(state.driver, 0x60, <<0x22>>)
 
     # Power saving setting
-    write(epd, 0xE3, <<0x88>>)
+    SpiDriver.write(state.driver, 0xE3, <<0x88>>)
 
     # Temperature sensor enabled, calibration offset 0
-    write(epd, 0x41, <<0x00>>)
+    SpiDriver.write(state.driver, 0x41, <<0x00>>)
 
-    {:ok, epd}
+    {:ok, state}
   end
 
-  @impl true
-  def draw(%__MODULE__.State{} = epd, image, opts \\ []) when is_binary(image) do
-    write(epd, 0x13, image)
+  @impl EInk.Driver
+  def draw(state, image, opts \\ []) do
+    if state.driver.debug, do: Logger.debug("UC8276 draw")
+
+    SpiDriver.write(state.driver, 0x13, image)
 
     use_lut = Keyword.get(opts, :refresh_type, :full)
 
     cond do
-      epd.current_lut == use_lut -> :ok
-      true -> load_lut(epd, @lut[use_lut])
+      state.current_lut == use_lut -> :ok
+      true -> load_lut(state, @lut[use_lut])
     end
 
-    write(epd, 0x17, <<0xA5>>)
-    wait_for_busy(epd)
+    SpiDriver.write(state.driver, 0x17, <<0xA5>>)
+    SpiDriver.wait_for_busy(state.driver)
 
-    {:ok, put_in(epd.current_lut, use_lut)}
+    {:ok, %{state | current_lut: use_lut}}
   end
 
-  defp load_lut(%__MODULE__.State{} = epd, lut) do
+  @impl EInk.Driver
+  def sleep(state) do
+    if state.driver.debug, do: Logger.debug("UC8276 entering deep sleep")
+
+    SpiDriver.write(state.driver, 0x07, <<0xA5>>)
+    {:ok, state}
+  end
+
+  @impl EInk.Driver
+  def wake(state) do
+    if state.driver.debug, do: Logger.debug("UC8276 waking up")
+
+    {:ok, state} = reset(state)
+    {:ok, state}
+  end
+
+  defp load_lut(state, lut) do
     for {reg, lut_data} <- lut do
-      write(epd, reg, lut_data)
+      SpiDriver.write(state.driver, reg, lut_data)
     end
-  end
-
-  defp chunk(""), do: []
-  defp chunk(<<chunk::binary-size(1024), rest::binary>>), do: [chunk | chunk(rest)]
-  defp chunk(remainder), do: [remainder]
-
-  defp debug_hex_str(bytes) do
-    :binary.bin_to_list(bytes)
-    |> Enum.map(fn byte ->
-      byte
-      |> Integer.to_string(16)
-      |> String.pad_leading(2, "0")
-      |> then(&"0x#{&1}")
-    end)
-    |> Enum.join(", ")
   end
 end
