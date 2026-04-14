@@ -24,3 +24,5 @@ eink-*.tar
 
 # Rust binary artifacts
 /target/
+
+*.txt
