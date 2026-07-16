@@ -4,8 +4,6 @@ defmodule EInk.Driver.UC8179 do
   alias EInk.Driver.SpiDriver
   alias Circuits.GPIO
 
-  require Logger
-
   @lut %{
     full: %{
       0x20 =>
