@@ -80,6 +80,7 @@ defmodule EInk.Driver.UC8179 do
     SpiDriver.write(state.driver, 0x61, <<0x02, 0x88, 0x01, 0xE0>>)
     SpiDriver.write(state.driver, 0x65, <<0x00, 0x10, 0x00, 0x00>>)
     SpiDriver.write(state.driver, 0x82, <<0x18>>)
+    # Border control: 0x29 white, 0x19 black, 0xA9 floating
     SpiDriver.write(state.driver, 0x50, <<0x29, 0x07>>)
     SpiDriver.write(state.driver, 0x52, <<0x02>>)
     SpiDriver.write(state.driver, 0x60, <<0x22>>)
