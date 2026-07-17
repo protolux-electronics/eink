@@ -72,7 +72,8 @@ defmodule EInk.Driver.UC8179 do
 
   @impl EInk.Driver
   def init(state, _opts \\ []) do
-    SpiDriver.write(state.driver, 0x00, <<0x3F, 0x09>>)
+    # Scan directions: 0X37 0X3B 0X3F 0X33
+    SpiDriver.write(state.driver, 0x00, <<0x33, 0x09>>)
     SpiDriver.write(state.driver, 0x01, <<0x03, 0x17, 0x3F, 0x3F, 0x03>>)
     SpiDriver.write(state.driver, 0x06, <<0x17, 0x17, 0x3D, 0x3C>>)
     SpiDriver.write(state.driver, 0x30, <<0x08>>)
