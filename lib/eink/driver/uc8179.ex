@@ -45,7 +45,7 @@ defmodule EInk.Driver.UC8179 do
 
     if state.driver.debug, do: Logger.debug("UC8179 init for #{width}x#{height}")
 
-    state = ensure_state(state, :full, {width, height})
+    state = ensure_state(state, :full, {width, height}, opts)
 
     # Clear buffer 0x10
     SpiDriver.write(state.driver, 0x10, :binary.copy(<<0xFF>>, div(width * height, 8)))
@@ -71,13 +71,13 @@ defmodule EInk.Driver.UC8179 do
 
     # Ensure chip is in the correct mode/LUT state
     previous_state = state.active_state
-    state = ensure_state(state, mode, res)
+    state = ensure_state(state, mode, res, opts)
 
     # Specific UC8179 logic for subsequent refreshes (boot_flag equivalent)
-    # If active_state was already set (not the first draw after reset/init), 
+    # If active_state was already set (not the first draw after reset/init),
     # we might need to set the data interval.
     if previous_state != nil do
-      init_commands = Settings.get_init(mode, res)
+      init_commands = Keyword.get(opts, :init) || Settings.get_init(mode, res)
 
       data_interval =
         if init_commands |> List.keyfind(0x61, 0) == {0x61, <<0x03, 0x20, 0x01, 0xE0>>},
@@ -120,7 +120,11 @@ defmodule EInk.Driver.UC8179 do
     {:ok, state}
   end
 
-  defp ensure_state(state, mode, res) do
+  defp ensure_state(state, mode, res, opts) do
+    # Waveform overrides from EInk.set_waveform win over the packaged defaults.
+    init = Keyword.get(opts, :init) || Settings.get_init(mode, res)
+    lut = Keyword.get(opts, :lut) || Settings.get_lut(mode, res)
+
     cond do
       state.active_state == mode ->
         state
@@ -129,13 +133,13 @@ defmodule EInk.Driver.UC8179 do
         # Major mode shift or starting from nil requires full init
         state = if mode == :grayscale, do: elem(reset(state), 1), else: state
 
-        state = apply_commands(state, Settings.get_init(mode, res))
-        state = if lut = Settings.get_lut(mode, res), do: apply_commands(state, lut), else: state
+        state = apply_commands(state, init)
+        state = if lut, do: apply_commands(state, lut), else: state
         %{state | active_state: mode}
 
       true ->
         # B&W mode shift usually only requires a LUT update
-        state = if lut = Settings.get_lut(mode, res), do: apply_commands(state, lut), else: state
+        state = if lut, do: apply_commands(state, lut), else: state
         %{state | active_state: mode}
     end
   end

@@ -144,6 +144,33 @@ defmodule EInkTest do
     assert_receive {:driver_draw, %Dither{}, opts}
     assert opts[:dither] == false
   end
+
+  test "set_waveform merges the mode's override into subsequent draws" do
+    lut = EInk.Driver.UC8276.Settings.grayscale_lut([0, 8, 16, 54])
+    EInk.set_waveform(:grayscale, lut: lut)
+
+    EInk.draw(<<0, 1, 2>>, mode: :grayscale)
+    assert_receive {:driver_draw, _data, opts}
+    assert opts[:lut] == lut
+  end
+
+  test "waveform overrides are scoped to their mode" do
+    EInk.set_waveform(:grayscale, lut: [{0x20, <<0>>}])
+
+    # A :full draw must not pick up the :grayscale override
+    EInk.draw(<<0, 1, 2>>, mode: :full)
+    assert_receive {:driver_draw, _data, opts}
+    refute opts[:lut]
+  end
+
+  test "clear_waveform removes a previously set override" do
+    EInk.set_waveform(:grayscale, lut: [{0x20, <<0>>}])
+    EInk.clear_waveform(:grayscale)
+
+    EInk.draw(<<0, 1, 2>>, mode: :grayscale)
+    assert_receive {:driver_draw, _data, opts}
+    refute opts[:lut]
+  end
 end
 
 defmodule EInk.UtilsTest do
@@ -171,5 +198,18 @@ defmodule EInk.UtilsTest do
     
     assert ch1 == <<0x66>>
     assert ch2 == <<0x55>>
+  end
+end
+
+defmodule EInk.Driver.UC8276.SettingsTest do
+  use ExUnit.Case
+  alias EInk.Driver.UC8276.Settings
+
+  test "grayscale_lut rebuilds the calibrated grayscale LUT byte-for-byte" do
+    assert Settings.grayscale_lut([0, 5, 10, 54], 63) == Settings.get_lut(:grayscale, {400, 300})
+  end
+
+  test "grayscale_lut rejects whiten counts outside 0..63" do
+    assert_raise FunctionClauseError, fn -> Settings.grayscale_lut([0, 5, 10, 99]) end
   end
 end

@@ -41,7 +41,7 @@ defmodule EInk.Driver.UC8276 do
     if state.driver.debug, do: Logger.debug("UC8276 init for #{width}x#{height}")
 
     # Default to :full state
-    state = ensure_state(state, :full, {width, height})
+    state = ensure_state(state, :full, {width, height}, opts)
 
     {:ok, %{state | border_flag: false}}
   end
@@ -63,7 +63,7 @@ defmodule EInk.Driver.UC8276 do
       end
 
     # Ensure chip is in the correct mode/LUT state
-    state = ensure_state(state, mode, res)
+    state = ensure_state(state, mode, res, opts)
 
     case mode do
       :grayscale ->
@@ -102,7 +102,11 @@ defmodule EInk.Driver.UC8276 do
     {:ok, state}
   end
 
-  defp ensure_state(state, mode, res) do
+  defp ensure_state(state, mode, res, opts) do
+    # Waveform overrides from EInk.set_waveform win over the packaged defaults.
+    init = Keyword.get(opts, :init) || Settings.get_init(mode, res)
+    lut = Keyword.get(opts, :lut) || Settings.get_lut(mode, res)
+
     cond do
       state.active_state == mode ->
         state
@@ -111,14 +115,14 @@ defmodule EInk.Driver.UC8276 do
         # Major mode shift or starting from nil requires full init
         state = if mode == :grayscale, do: elem(reset(state), 1), else: state
 
-        state = apply_commands(state, Settings.get_init(mode, res))
-        state = if lut = Settings.get_lut(mode, res), do: apply_commands(state, lut), else: state
+        state = apply_commands(state, init)
+        state = if lut, do: apply_commands(state, lut), else: state
         %{state | active_state: mode}
 
       true ->
         # B&W mode shift (:full <-> :fast) usually only requires a LUT update
         # because the underlying hardware init is the same for both.
-        state = if lut = Settings.get_lut(mode, res), do: apply_commands(state, lut), else: state
+        state = if lut, do: apply_commands(state, lut), else: state
         %{state | active_state: mode}
     end
   end

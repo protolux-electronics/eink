@@ -6,7 +6,16 @@ defmodule EInk do
 
   require Logger
 
-  defstruct [:driver_mod, :driver_state, :width, :height, :palette, :orientation, :dither]
+  defstruct [
+    :driver_mod,
+    :driver_state,
+    :width,
+    :height,
+    :palette,
+    :orientation,
+    :dither,
+    waveform_overrides: %{}
+  ]
 
   # Public API
 
@@ -32,6 +41,28 @@ defmodule EInk do
 
   def capabilities() do
     GenServer.call(__MODULE__, :capabilities)
+  end
+
+  @doc """
+  Overrides the init and/or LUT commands for a draw mode until cleared.
+
+  `overrides` is `[init: [{reg, binary}], lut: [{reg, binary}]]` (both keys optional),
+  stored per mode and merged into every later draw of that mode. Resets the driver, so
+  the next draw pays one full re-init (~1s) — by design, the LUT lives in chip registers
+  that only a fresh init reliably reloads. Lets apps calibrate a panel live, e.g. a
+  brightness slider feeding `EInk.Driver.UC8276.Settings.grayscale_lut/2`.
+  """
+  def set_waveform(mode, overrides) do
+    GenServer.call(__MODULE__, {:set_waveform, mode, overrides})
+  end
+
+  @doc """
+  Drops the waveform override for `mode`, restoring defaults.
+
+  Resets the driver like `set_waveform/2`, so the next draw re-inits.
+  """
+  def clear_waveform(mode) do
+    GenServer.call(__MODULE__, {:clear_waveform, mode})
   end
 
   # GenServer Callbacks
@@ -96,12 +127,13 @@ defmodule EInk do
           raise "Unsupported image type for EInk.draw: #{inspect(other)}"
       end
 
-    # Pass mode, width, height to driver
+    # Pass mode, width, height and any waveform override for this mode to driver
     opts =
       opts
       |> Keyword.put(:mode, mode)
       |> Keyword.put_new(:width, state.width)
       |> Keyword.put_new(:height, state.height)
+      |> Keyword.merge(Map.get(state.waveform_overrides, mode, []))
 
     {:ok, driver_state} = state.driver_mod.draw(state.driver_state, processed, opts)
     {:reply, :ok, %{state | driver_state: driver_state}}
@@ -139,6 +171,7 @@ defmodule EInk do
       |> Keyword.put(:mode, mode)
       |> Keyword.put_new(:width, state.width)
       |> Keyword.put_new(:height, state.height)
+      |> Keyword.merge(Map.get(state.waveform_overrides, mode, []))
 
     {:ok, driver_state} = state.driver_mod.draw(state.driver_state, data, opts)
     {:reply, :ok, %{state | driver_state: driver_state}}
@@ -159,6 +192,23 @@ defmodule EInk do
   @impl true
   def handle_call(:capabilities, _from, state) do
     {:reply, %{width: state.width, height: state.height, palette: state.palette}, state}
+  end
+
+  @impl true
+  def handle_call({:set_waveform, mode, overrides}, _from, state) do
+    overrides_map = Map.put(state.waveform_overrides, mode, overrides)
+
+    # reset forces active_state: nil, so the next draw re-inits with the override
+    {:ok, driver_state} = state.driver_mod.reset(state.driver_state)
+    {:reply, :ok, %{state | waveform_overrides: overrides_map, driver_state: driver_state}}
+  end
+
+  @impl true
+  def handle_call({:clear_waveform, mode}, _from, state) do
+    overrides_map = Map.delete(state.waveform_overrides, mode)
+
+    {:ok, driver_state} = state.driver_mod.reset(state.driver_state)
+    {:reply, :ok, %{state | waveform_overrides: overrides_map, driver_state: driver_state}}
   end
 
   defp preprocess_dither(dither, state, opts) do

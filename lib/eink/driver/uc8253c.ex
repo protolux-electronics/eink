@@ -43,7 +43,7 @@ defmodule EInk.Driver.UC8253C do
 
     if state.driver.debug, do: Logger.debug("UC8253C init")
 
-    state = ensure_state(state, :full, {width, height})
+    state = ensure_state(state, :full, {width, height}, opts)
 
     # Clear buffer 0x10
     SpiDriver.write(state.driver, 0x10, :binary.copy(<<0xFF>>, div(width * height, 8)))
@@ -69,7 +69,7 @@ defmodule EInk.Driver.UC8253C do
 
     # Ensure chip is in the correct mode/LUT state
     previous_state = state.active_state
-    state = ensure_state(state, mode, res)
+    state = ensure_state(state, mode, res, opts)
 
     # Specific UC8253C logic for subsequent refreshes (boot_flag equivalent)
     if previous_state != nil do
@@ -109,7 +109,10 @@ defmodule EInk.Driver.UC8253C do
     {:ok, state}
   end
 
-  defp ensure_state(state, mode, res) do
+  defp ensure_state(state, mode, res, opts) do
+    # Waveform overrides from EInk.set_waveform win over the packaged defaults.
+    init = Keyword.get(opts, :init) || Settings.get_init(mode, res)
+
     cond do
       state.active_state == mode ->
         state
@@ -118,13 +121,13 @@ defmodule EInk.Driver.UC8253C do
         # Major mode shift or starting from nil requires full init
         state = if mode == :grayscale, do: elem(reset(state), 1), else: state
 
-        state = apply_commands(state, Settings.get_init(mode, res))
-        state = apply_lut(state, mode, res)
+        state = apply_commands(state, init)
+        state = apply_lut(state, mode, res, opts)
         %{state | active_state: mode}
 
       true ->
         # B&W mode shift usually only requires a LUT update
-        state = apply_lut(state, mode, res)
+        state = apply_lut(state, mode, res, opts)
         %{state | active_state: mode}
     end
   end
@@ -137,8 +140,8 @@ defmodule EInk.Driver.UC8253C do
     state
   end
 
-  defp apply_lut(state, mode, resolution) do
-    lut_data = Settings.get_lut(mode, resolution)
+  defp apply_lut(state, mode, resolution, opts) do
+    lut_data = Keyword.get(opts, :lut) || Settings.get_lut(mode, resolution)
 
     if lut_data do
       lut_map = Map.new(lut_data)
