@@ -47,17 +47,12 @@ defmodule EInk.Driver.SpiDriver do
 
   @spec write(t(), non_neg_integer(), binary()) :: :ok | {:error, any()}
   def write(%__MODULE__{} = state, command, data \\ "", opts \\ []) do
-    chunk_size = Keyword.get(opts, :chunk_size, 1024)
-
     :ok = GPIO.write(state.dc, 0)
-    {:ok, _data} = SPI.transfer(state.spi, <<command>>)
+    :ok = SPI.write(state.spi, <<command>>)
 
     if data != "" do
       :ok = GPIO.write(state.dc, 1)
-
-      for chunk <- chunk(data, chunk_size), chunk != "" do
-        {:ok, _data} = SPI.transfer(state.spi, chunk)
-      end
+      :ok = SPI.write(state.spi, data)
     end
 
     :ok
@@ -78,12 +73,4 @@ defmodule EInk.Driver.SpiDriver do
       _value, _acc -> {:halt, :ok}
     end)
   end
-
-  def chunk(data, chunk_size) when byte_size(data) > chunk_size do
-    <<chunk::binary-size(chunk_size), rest::binary>> = data
-    [chunk | chunk(rest, chunk_size)]
-  end
-
-  def chunk("", _chunk_size), do: []
-  def chunk(chunk, _chunk_size), do: [chunk]
 end
