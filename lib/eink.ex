@@ -1,9 +1,9 @@
 defmodule EInk do
+  require Logger
+
   @type t() :: %__MODULE__{}
 
   defstruct [:driver_mod, :driver]
-
-  require Logger
 
   def new(driver_module, opts \\ []) do
     {:ok, driver} = driver_module.new(opts)

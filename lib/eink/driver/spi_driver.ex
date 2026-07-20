@@ -1,9 +1,8 @@
 defmodule EInk.Driver.SpiDriver do
-  defstruct [:reset, :busy, :dc, :spi, :debug]
-
   alias Circuits.GPIO
   alias Circuits.SPI
 
+  defstruct [:reset, :busy, :dc, :spi, :debug]
   @type t() :: %__MODULE__{}
 
   def open(opts) do

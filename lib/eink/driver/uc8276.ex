@@ -1,14 +1,14 @@
 defmodule EInk.Driver.UC8276 do
   use EInk.Driver, width: 400, height: 300, palette: :bw, partial_refresh: true
 
-  defmodule State do
-    defstruct [:spi, :dc, :reset, :busy, :current_lut, :debug]
-  end
-
   alias Circuits.GPIO
   alias Circuits.SPI
 
   require Logger
+
+  defmodule State do
+    defstruct [:spi, :dc, :reset, :busy, :current_lut, :debug]
+  end
 
   @lut %{
     full: %{

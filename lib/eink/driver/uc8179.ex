@@ -1,8 +1,8 @@
 defmodule EInk.Driver.UC8179 do
   use EInk.Driver, width: 800, height: 600, palette: :bw, partial_refresh: true
 
-  alias EInk.Driver.SpiDriver
   alias Circuits.GPIO
+  alias EInk.Driver.SpiDriver
 
   @lut %{
     full: %{
