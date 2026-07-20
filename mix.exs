@@ -56,7 +56,8 @@ defmodule Eink.MixProject do
       files: [
         "lib",
         "mix.exs",
-        "README.md"
+        "README.md",
+        "LICENSES"
       ],
       licenses: ["Apache-2.0"],
       links: %{

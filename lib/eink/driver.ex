@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2025 Gus Workman
+# SPDX-License-Identifier: Apache-2.0
 defmodule EInk.Driver do
   @type state :: any()
   @type capability_key :: :width | :height | :type | :palette | :partial_refresh

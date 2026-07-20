@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2025 Gus Workman
+# SPDX-FileCopyrightText: 2026 Frank Hunleth
+# SPDX-License-Identifier: Apache-2.0
 defmodule EInk.Driver.SpiDriver do
   alias Circuits.GPIO
   alias Circuits.SPI

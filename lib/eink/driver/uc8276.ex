@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2025 Gus Workman
+# SPDX-FileCopyrightText: 2026 Frank Hunleth
+# SPDX-License-Identifier: Apache-2.0
 defmodule EInk.Driver.UC8276 do
   use EInk.Driver, width: 400, height: 300, palette: :bw, partial_refresh: true
 
