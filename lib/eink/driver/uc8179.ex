@@ -97,10 +97,7 @@ defmodule EInk.Driver.UC8179 do
 
     use_lut = Keyword.get(opts, :refresh_type, :full)
 
-    cond do
-      state.current_lut == use_lut -> :ok
-      true -> load_lut(state, @lut[use_lut])
-    end
+    state = load_lut(state, use_lut)
 
     SpiDriver.write(state.driver, 0x17, <<0xA5>>)
     Process.sleep(10)
@@ -123,9 +120,13 @@ defmodule EInk.Driver.UC8179 do
     init(state)
   end
 
-  defp load_lut(state, lut) do
-    for {reg, lut_data} <- lut do
-      SpiDriver.write(state.driver, reg, lut_data)
-    end
+  defp load_lut(%{current_lut: lut} = state, lut), do: state
+
+  defp load_lut(state, lut_name) do
+    lut_settings = @lut[lut_name]
+
+    Enum.each(lut_settings, fn {reg, data} -> SpiDriver.write(state.driver, reg, data) end)
+
+    %{state | current_lut: lut_name}
   end
 end

@@ -98,6 +98,7 @@ defmodule EInk.Driver.UC8276 do
     if epd.debug, do: Logger.debug("UC8276 entering deep sleep")
 
     write(epd, 0x07, <<0xA5>>)
+    {:ok, epd}
   end
 
   @impl true
@@ -133,21 +134,12 @@ defmodule EInk.Driver.UC8276 do
           "UC8276 Command: 0x#{Integer.to_string(command, 16) |> String.pad_leading(2, "0")}"
         )
 
-    :ok = GPIO.write(epd.dc, 0)
-    {:ok, _data} = SPI.transfer(epd.spi, <<command>>)
+    GPIO.write(epd.dc, 0)
+    SPI.write!(epd.spi, <<command>>)
 
     if data != "" do
-      :ok = GPIO.write(epd.dc, 1)
-
-      for chunk <- chunk(data), chunk != "" do
-        cond do
-          not epd.debug -> :ok
-          byte_size(data) <= 128 -> Logger.debug("UC8276 Data: #{debug_hex_str(chunk)}")
-          true -> Logger.debug("UC8276 Data: #{byte_size(chunk)} bytes")
-        end
-
-        {:ok, _data} = SPI.transfer(epd.spi, chunk)
-      end
+      GPIO.write(epd.dc, 1)
+      SPI.write!(epd.spi, data)
     end
 
     :ok
@@ -206,23 +198,6 @@ defmodule EInk.Driver.UC8276 do
   end
 
   defp load_lut(%__MODULE__.State{} = epd, lut) do
-    for {reg, lut_data} <- lut do
-      write(epd, reg, lut_data)
-    end
-  end
-
-  defp chunk(""), do: []
-  defp chunk(<<chunk::binary-size(1024), rest::binary>>), do: [chunk | chunk(rest)]
-  defp chunk(remainder), do: [remainder]
-
-  defp debug_hex_str(bytes) do
-    :binary.bin_to_list(bytes)
-    |> Enum.map(fn byte ->
-      byte
-      |> Integer.to_string(16)
-      |> String.pad_leading(2, "0")
-      |> then(&"0x#{&1}")
-    end)
-    |> Enum.join(", ")
+    Enum.each(lut, fn {reg, lut_data} -> write(epd, reg, lut_data) end)
   end
 end

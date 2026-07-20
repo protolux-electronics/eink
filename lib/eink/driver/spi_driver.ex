@@ -33,14 +33,14 @@ defmodule EInk.Driver.SpiDriver do
     }
   end
 
-  @spec write(t(), non_neg_integer(), binary()) :: :ok | {:error, any()}
+  @spec write(t(), non_neg_integer(), binary()) :: :ok
   def write(%__MODULE__{} = state, command, data \\ "", _opts \\ []) do
-    :ok = GPIO.write(state.dc, 0)
-    :ok = SPI.write(state.spi, <<command>>)
+    GPIO.write(state.dc, 0)
+    SPI.write!(state.spi, <<command>>)
 
     if data != "" do
-      :ok = GPIO.write(state.dc, 1)
-      :ok = SPI.write(state.spi, data)
+      GPIO.write(state.dc, 1)
+      SPI.write!(state.spi, data)
     end
 
     :ok
